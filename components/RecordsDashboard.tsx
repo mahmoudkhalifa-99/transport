@@ -33,21 +33,27 @@ const RecordsDashboard: React.FC<Props> = ({ records, onEdit, onDelete, onStatus
   const [filterSite, setFilterSite] = useState<string>('all');
 
   const filteredRecords = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
     return records.filter(r => {
+      const carNum = String(r.carNumber || '').toLowerCase();
+      const drName = String(r.driverName || '').toLowerCase();
+      const ordNo = String(r.orderNo || '').toLowerCase();
+      const wbNo = String(r.waybillNo || '').toLowerCase();
+
       const matchesSearch = 
-        r.carNumber.includes(searchTerm) || 
-        r.driverName.includes(searchTerm) || 
-        r.orderNo.includes(searchTerm) ||
-        r.waybillNo.includes(searchTerm);
+        carNum.includes(searchLower) || 
+        drName.includes(searchLower) || 
+        ordNo.includes(searchLower) ||
+        wbNo.includes(searchLower);
       
       const matchesStatus = filterStatus === 'all' || r.status === filterStatus;
-      const matchesSite = filterSite === 'all' || r.unloadingSite === filterSite;
+      const matchesSite = filterSite === 'all' || String(r.unloadingSite).trim() === filterSite;
       
       return matchesSearch && matchesStatus && matchesSite;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [records, searchTerm, filterStatus, filterSite]);
 
-  const uniqueSites = useMemo(() => Array.from(new Set(records.map(r => String(r.unloadingSite).trim()))).filter(Boolean), [records]);
+  const uniqueSites = useMemo(() => Array.from(new Set(records.map(r => String(r.unloadingSite || '').trim()))).filter(Boolean), [records]);
 
   const stats = useMemo(() => {
     return {
