@@ -1,0 +1,71 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <title>حركة نقل الخامات الرئيسية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: 'Cairo', sans-serif;
+        background-color: #f8fafc;
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* تخصيص شكل شريط التمرير ليكون احترافياً */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* منع التفاف النص في رؤوس الجداول لضمان ثبات العرض */
+      th {
+        white-space: nowrap;
+      }
+
+      @media print {
+        .no-print { display: none !important; }
+      }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-slate-50 text-slate-900">
+    <div id="root" class="flex flex-col min-h-screen w-full"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
