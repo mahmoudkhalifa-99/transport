@@ -257,7 +257,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] font-['Cairo'] text-right flex flex-col" style={{ fontSize: `${fontSizes[activeTab]}px` }}>
       <Toast {...toast} onClose={hideToast} />
       <div className="flex flex-col min-h-screen">
-        <header className={`p-4 sticky top-0 z-50 text-white shadow-lg ${selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'} flex justify-between items-center transition-all w-full`}>
+        <header className={`p-4 sticky top-0 z-50 text-white shadow-lg no-print ${selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'} flex justify-between items-center transition-all w-full`}>
           <button onClick={() => setSelectedMaterial(null)} className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-all flex-shrink-0"><i className="fas fa-chevron-right"></i></button>
           <div className="flex flex-col items-center gap-1 flex-1 px-4 text-center">
             <h1 className="text-lg md:text-xl font-black tracking-tight mb-0.5 animate-in slide-in-from-top duration-700">حركة نقل الخامات الرئيسية</h1>

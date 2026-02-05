@@ -22,7 +22,7 @@
         flex-direction: column;
       }
 
-      /* تخصيص شكل شريط التمرير ليكون احترافياً */
+      /* تخصيص شكل شريط التمرير */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -38,13 +38,59 @@
         background: #94a3b8;
       }
 
-      /* منع التفاف النص في رؤوس الجداول لضمان ثبات العرض */
       th {
         white-space: nowrap;
       }
 
+      /* أنماط الطباعة الاحترافية */
       @media print {
         .no-print { display: none !important; }
+        
+        @page {
+          size: A4 landscape;
+          margin: 1cm;
+        }
+
+        body {
+          background-color: white !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .print-only {
+          display: block !important;
+        }
+
+        .print-shadow-none {
+          shadow: none !important;
+          box-shadow: none !important;
+          border: 1px solid #e2e8f0 !important;
+        }
+
+        table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          font-size: 10pt !important;
+        }
+
+        th, td {
+          border: 1px solid #cbd5e1 !important;
+          padding: 8px !important;
+          color: black !important;
+        }
+
+        th {
+          background-color: #f1f5f9 !important;
+        }
+
+        .bg-slate-50\/20 { background-color: transparent !important; }
+        .bg-blue-50\/20 { background-color: #eff6ff !important; }
+        .bg-indigo-50\/10 { background-color: #f5f3ff !important; }
+        .bg-slate-100\/30 { background-color: #f8fafc !important; }
+      }
+
+      .print-only {
+        display: none;
       }
 
       .no-scrollbar::-webkit-scrollbar { display: none; }

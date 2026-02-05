@@ -19,19 +19,15 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
   const [tempBalance, setTempBalance] = useState<Partial<FactoryBalance>>({});
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // تحديد المادة المطلوبة بناءً على القسم المختار
   const activeMaterialName = selectedMaterial === 'soy' ? 'صويا' : 'ذرة';
 
   const data = useMemo(() => {
     const summary: Record<string, any> = {};
-
-    // استخراج المواقع المرتبطة فقط بالقسم الحالي
     const allSites = new Set<string>();
     releases.forEach(r => allSites.add(String(r.siteName).trim()));
     records.forEach(r => allSites.add(String(r.unloadingSite).trim()));
 
     allSites.forEach(site => {
-      // معالجة المادة النشطة فقط في هذا القسم
       const material = activeMaterialName;
       const key = `${site}||${material}`;
       
@@ -57,7 +53,6 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
       const releaseRemaining = totalReleased - totalArrived - inTransit;
       const factoryStock = opening + totalArrived - spending;
 
-      // لا تظهر المواقع التي ليس لها أي بيانات (إفراج أو رصيد أو حركة)
       if (totalReleased > 0 || opening > 0 || totalArrived > 0 || inTransit > 0) {
         summary[key] = {
           site,
@@ -101,9 +96,13 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const TableSection = ({ title, items, colorClass }: { title: string, items: any[], colorClass: string }) => (
-    <div className="bg-white rounded-[30px] md:rounded-[40px] shadow-sm border border-slate-100 overflow-hidden mb-8 md:mb-10 w-full">
-      <div className={`p-4 md:p-6 border-b flex justify-between items-center ${colorClass} text-white`}>
+    <div className="bg-white rounded-[30px] md:rounded-[40px] shadow-sm border border-slate-100 overflow-hidden mb-8 md:mb-10 w-full print-shadow-none">
+      <div className={`p-4 md:p-6 border-b flex justify-between items-center ${colorClass} text-white no-print`}>
         <h3 className="font-black text-lg md:text-xl">{title}</h3>
         <span className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest">{items.length} مواقع</span>
       </div>
@@ -120,7 +119,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
               <th className="p-4 md:p-5">الوارد للمصنع</th>
               <th className="p-4 md:p-5">الصرف (يدوي)</th>
               <th className="p-4 md:p-5">رصيد المصنع الحالي</th>
-              {canEdit && <th className="p-4 md:p-5">إجراء</th>}
+              {canEdit && <th className="p-4 md:p-5 no-print">إجراء</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 text-slate-700">
@@ -172,7 +171,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
                     {item.factoryStock.toLocaleString()}
                   </td>
                   {canEdit && (
-                    <td className="p-4 md:p-5">
+                    <td className="p-4 md:p-5 no-print">
                       {isEditing ? (
                         <div className="flex gap-2 justify-center">
                            <button disabled={isUpdating} onClick={handleSave} className="bg-emerald-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-sm hover:bg-emerald-700 transition-all"><i className="fas fa-check text-xs"></i></button>
@@ -196,20 +195,42 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
 
   return (
     <div className="animate-in fade-in duration-700 w-full overflow-hidden">
-      <div className="flex flex-row-reverse items-center gap-4 mb-8">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg flex-shrink-0 ${selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'}`}>
-          <i className="fas fa-industry text-xl"></i>
+      {/* Print Header */}
+      <div className="print-only mb-10 text-right border-b-4 border-slate-900 pb-6">
+        <div className="flex justify-between items-start">
+            <div className="text-right">
+                <h1 className="text-3xl font-black mb-2">نظام إدارة نقل الخامات الرئيسي</h1>
+                <h2 className="text-xl font-bold text-slate-600">تقرير رصيد المصانع والإفراجات - قسم {activeMaterialName}</h2>
+                <p className="text-xs text-slate-400 mt-2">تاريخ الاستخراج: {new Date().toLocaleString('ar-EG')}</p>
+            </div>
+            <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-3xl font-black">
+                <i className="fas fa-industry"></i>
+            </div>
         </div>
-        <div className="text-right">
-          <h2 className="text-xl md:text-2xl font-black text-slate-800">رصيد المصانع والإفراجات - قسم {activeMaterialName}</h2>
-          <div className="space-y-1 mt-1">
-            <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
-                <span className="text-indigo-600 ml-2">متبقي الإفراج = إجمالي الإفراج - تم تحميله - في الطريق</span>
-                <span className="hidden md:inline">|</span>
-                <span className="text-emerald-600 mr-2 block md:inline">رصيد المصنع = بداية المده + المنفذ - الصرف</span>
-            </p>
-          </div>
+      </div>
+
+      <div className="flex flex-row-reverse items-center justify-between gap-4 mb-8 no-print">
+        <div className="flex flex-row-reverse items-center gap-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg flex-shrink-0 ${selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'}`}>
+            <i className="fas fa-industry text-xl"></i>
+            </div>
+            <div className="text-right">
+            <h2 className="text-xl md:text-2xl font-black text-slate-800">رصيد المصانع والإفراجات - قسم {activeMaterialName}</h2>
+            <div className="space-y-1 mt-1">
+                <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
+                    <span className="text-indigo-600 ml-2">متبقي الإفراج = إجمالي الإفراج - تم تحميله - في الطريق</span>
+                    <span className="hidden md:inline">|</span>
+                    <span className="text-emerald-600 mr-2 block md:inline">رصيد المصنع = بداية المده + المنفذ - الصرف</span>
+                </p>
+            </div>
+            </div>
         </div>
+        <button 
+            onClick={handlePrint}
+            className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+        >
+            <i className="fas fa-print"></i> طباعة PDF
+        </button>
       </div>
 
       <div className="w-full">
@@ -218,6 +239,11 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
           items={data} 
           colorClass={selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'} 
         />
+      </div>
+
+      {/* Print Footer */}
+      <div className="print-only mt-10 text-center text-[10px] text-slate-400 font-bold border-t pt-4">
+        تم استخراج هذا التقرير تلقائياً بواسطة نظام النقل الذكي
       </div>
     </div>
   );
