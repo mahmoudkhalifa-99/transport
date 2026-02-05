@@ -107,17 +107,17 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
         <span className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest">{items.length} مواقع</span>
       </div>
       <div className="overflow-x-auto w-full">
-        <table className="w-full text-center border-collapse min-w-[1200px]">
+        <table className="w-full text-center border-collapse min-w-[1000px] md:min-w-[1200px]">
           <thead>
             <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
               <th className="p-4 md:p-5">الموقع</th>
               <th className="p-4 md:p-5">رصيد البداية</th>
-              <th className="p-4 md:p-5">إجمالي الإفراجات</th>
+              <th className="p-4 md:p-5 no-print">إجمالي الإفراجات</th>
               <th className="p-4 md:p-5">تم تحميله (المنفذ)</th>
               <th className="p-4 md:p-5">في الطريق (الجاري)</th>
-              <th className="p-4 md:p-5">متبقي الإفراج (بالميناء)</th>
+              <th className="p-4 md:p-5">بالميناء (متبقي)</th>
               <th className="p-4 md:p-5">الوارد للمصنع</th>
-              <th className="p-4 md:p-5">الصرف (يدوي)</th>
+              <th className="p-4 md:p-5 no-print">الصرف (يدوي)</th>
               <th className="p-4 md:p-5">رصيد المصنع الحالي</th>
               {canEdit && <th className="p-4 md:p-5 no-print">إجراء</th>}
             </tr>
@@ -140,7 +140,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
                       <span className="text-slate-400">{item.opening.toLocaleString()}</span>
                     )}
                   </td>
-                  <td className="p-4 md:p-5 font-bold text-amber-600">
+                  <td className="p-4 md:p-5 font-bold text-amber-600 no-print">
                     {item.totalReleased.toLocaleString()}
                   </td>
                   <td className="p-4 md:p-5 font-bold text-slate-600">
@@ -155,7 +155,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
                   <td className="p-4 md:p-5 font-bold text-emerald-600">
                     {item.totalArrived.toLocaleString()}
                   </td>
-                  <td className="p-4 md:p-5 font-bold">
+                  <td className="p-4 md:p-5 font-bold no-print">
                     {isEditing ? (
                       <input 
                         type="number" 
@@ -200,7 +200,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
         <div className="flex justify-between items-start">
             <div className="text-right">
                 <h1 className="text-3xl font-black mb-2">نظام إدارة نقل الخامات الرئيسي</h1>
-                <h2 className="text-xl font-bold text-slate-600">تقرير رصيد المصانع والإفراجات - قسم {activeMaterialName}</h2>
+                <h2 className="text-xl font-bold text-slate-600">تقرير أرصدة المخازن والموانئ - قسم {activeMaterialName}</h2>
                 <p className="text-xs text-slate-400 mt-2">تاريخ الاستخراج: {new Date().toLocaleString('ar-EG')}</p>
             </div>
             <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-3xl font-black">
@@ -229,7 +229,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
             onClick={handlePrint}
             className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
         >
-            <i className="fas fa-print"></i> طباعة PDF
+            <i className="fas fa-print"></i> طباعة PDF (Landscape)
         </button>
       </div>
 
@@ -243,7 +243,7 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
 
       {/* Print Footer */}
       <div className="print-only mt-10 text-center text-[10px] text-slate-400 font-bold border-t pt-4">
-        تم استخراج هذا التقرير تلقائياً بواسطة نظام النقل الذكي
+        تم استخراج هذا التقرير تلقائياً بواسطة نظام النقل الذكي | ملاحظة: تم إخفاء أعمدة الصرف والإفراج الكلي للتركيز على الأرصدة.
       </div>
     </div>
   );
