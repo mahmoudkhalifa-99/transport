@@ -271,9 +271,10 @@ const App: React.FC = () => {
         <nav className="bg-white border-b border-slate-100 sticky top-[72px] z-40 px-4 shadow-sm no-print w-full overflow-hidden">
           <div className="max-w-7xl mx-auto flex gap-2 py-3 overflow-x-auto no-scrollbar">
             {[
-              { id: 'home', label: 'أرصدة المخازن', icon: 'fa-warehouse' },
+              { id: 'home', label: 'أرصدة الموانئ', icon: 'fa-anchor' },
               { id: 'summary', label: 'موقف الإفراجات', icon: 'fa-chart-pie' },
               { id: 'dashboard', label: 'السجلات', icon: 'fa-list-ul' },
+              { id: 'factory_balance', label: 'رصيد المصانع', icon: 'fa-industry' },
               { id: 'add', label: 'إضافة نقلة', icon: 'fa-plus-circle', hide: currentUser?.role === 'viewer' },
               { id: 'releases', label: 'الإفراجات', icon: 'fa-file-invoice-dollar', hide: currentUser?.role === 'viewer' },
               { id: 'reports', label: 'التقارير', icon: 'fa-chart-line' },
@@ -308,6 +309,17 @@ const App: React.FC = () => {
               selectedMaterial={selectedMaterial}
               t={t}
             />
+          )}
+          {activeTab === 'factory_balance' && (
+             <FactoryBalanceView 
+               releases={filteredReleases}
+               records={filteredRecords}
+               factoryBalances={factoryBalances}
+               onNotify={notify}
+               canEdit={currentUser.role !== 'viewer'}
+               lang={lang}
+               selectedMaterial={selectedMaterial}
+             />
           )}
           {activeTab === 'add' && (
             selectedMaterial === 'soy' ? 
