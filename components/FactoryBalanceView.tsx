@@ -20,60 +20,91 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
   const [isUpdating, setIsUpdating] = useState(false);
 
   const activeMaterialName = selectedMaterial === 'soy' ? 'صويا' : 'ذرة';
+  
+  // تاريخ يوم أمس للمقارنة (الوارد للمصنع)
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  const normalize = (s: string) => String(s || '').trim().replace(/\s+/g, ' ').replace(/أ|إ|آ/g, 'ا').replace(/ة/g, 'ه');
 
   const data = useMemo(() => {
     const summary: Record<string, any> = {};
     const allSites = new Set<string>();
-    releases.forEach(r => allSites.add(String(r.siteName).trim()));
-    records.forEach(r => allSites.add(String(r.unloadingSite).trim()));
+    
+    releases.forEach(r => allSites.add(normalize(r.siteName)));
+    records.forEach(r => allSites.add(normalize(r.unloadingSite)));
+    factoryBalances.forEach(f => allSites.add(normalize(f.siteName)));
 
-    allSites.forEach(site => {
-      const material = activeMaterialName;
-      const key = `${site}||${material}`;
+    allSites.forEach(siteNorm => {
+      if (!siteNorm) return;
       
+      const originalName = releases.find(r => normalize(r.siteName) === siteNorm)?.siteName || 
+                           records.find(r => normalize(r.unloadingSite) === siteNorm)?.unloadingSite || 
+                           factoryBalances.find(f => normalize(f.siteName) === siteNorm)?.siteName || siteNorm;
+
+      const key = `${siteNorm}||${activeMaterialName}`;
       const manual = factoryBalances.find(fb => 
-        fb.siteName === site && String(fb.goodsType).includes(material)
+        normalize(fb.siteName) === siteNorm && String(fb.goodsType || '').includes(activeMaterialName)
       );
 
       const totalReleased = releases
-        .filter(r => String(r.siteName).trim() === site && String(r.goodsType).includes(material))
+        .filter(r => normalize(r.siteName) === siteNorm && String(r.goodsType || '').includes(activeMaterialName))
         .reduce((sum, r) => sum + Number(r.totalQuantity || 0), 0);
 
-      const totalArrived = records
-        .filter(r => String(r.unloadingSite).trim() === site && String(r.goodsType).includes(material) && r.status === OperationStatus.DONE)
+      const totalArrivedCumulative = records
+        .filter(r => normalize(r.unloadingSite) === siteNorm && String(r.goodsType || '').includes(activeMaterialName) && r.status === OperationStatus.DONE)
         .reduce((sum, r) => sum + Number(r.weight || 0), 0);
 
       const inTransit = records
-        .filter(r => String(r.unloadingSite).trim() === site && String(r.goodsType).includes(material) && r.status === OperationStatus.IN_PROGRESS)
+        .filter(r => normalize(r.unloadingSite) === siteNorm && String(r.goodsType || '').includes(activeMaterialName) && r.status === OperationStatus.IN_PROGRESS)
+        .reduce((sum, r) => sum + Number(r.weight || 0), 0);
+
+      const stopped = records
+        .filter(r => normalize(r.unloadingSite) === siteNorm && String(r.goodsType || '').includes(activeMaterialName) && r.status === OperationStatus.STOPPED)
+        .reduce((sum, r) => sum + Number(r.weight || 0), 0);
+
+      const yesterdayArrived = records
+        .filter(r => normalize(r.unloadingSite) === siteNorm && 
+                     String(r.goodsType || '').includes(activeMaterialName) && 
+                     r.status === OperationStatus.DONE &&
+                     String(r.date || '').split('T')[0] === yesterdayStr)
         .reduce((sum, r) => sum + Number(r.weight || 0), 0);
 
       const opening = manual?.openingBalance || 0;
       const spending = manual?.manualConsumption || 0;
 
-      const releaseRemaining = totalReleased - totalArrived - inTransit;
-      const factoryStock = opening + totalArrived - spending;
+      // حساب المتبقي بالميناء (قد يكون سالباً في حال تجاوز التحميل للإفراج)
+      const portRemaining = totalReleased - totalArrivedCumulative - inTransit - stopped;
 
-      if (totalReleased > 0 || opening > 0 || totalArrived > 0 || inTransit > 0) {
+      // رصيد المصنع الحالي = رصيد بداية المدة + الوارد - الصرف
+      const currentStock = (opening + yesterdayArrived) - spending;
+
+      if (totalReleased > 0 || opening > 0 || totalArrivedCumulative > 0 || inTransit > 0 || Math.abs(currentStock) > 0.001) {
         summary[key] = {
-          site,
-          material,
+          site: originalName,
+          siteNorm,
+          material: activeMaterialName,
           opening,
           spending,
           totalReleased,
-          totalArrived,
+          totalArrivedCumulative,
+          yesterdayArrived,
           inTransit,
-          releaseRemaining,
-          factoryStock
+          portRemaining,
+          currentStock
         };
       }
     });
 
-    return Object.values(summary);
-  }, [releases, records, factoryBalances, activeMaterialName]);
+    return Object.values(summary).sort((a, b) => a.site.localeCompare(b.site));
+  }, [releases, records, factoryBalances, activeMaterialName, yesterdayStr]);
 
   const handleEdit = (item: any) => {
     if (!canEdit) return;
-    setEditingKey(`${item.site}||${item.material}`);
+    setEditingKey(`${item.siteNorm}||${item.material}`);
     setTempBalance({
       siteName: item.site,
       goodsType: item.material,
@@ -87,163 +118,115 @@ const FactoryBalanceView: React.FC<Props> = ({ releases, records, factoryBalance
     setIsUpdating(true);
     try {
       await transportService.updateFactoryBalance(tempBalance as FactoryBalance);
-      onNotify('تم تحديث الرصيد بنجاح', 'success');
+      onNotify('تم تحديث البيانات بنجاح', 'success');
       setEditingKey(null);
     } catch (e) {
-      onNotify('فشل في التحديث', 'error');
+      onNotify('خطأ في الاتصال بالسيرفر', 'error');
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const TableSection = ({ title, items, colorClass }: { title: string, items: any[], colorClass: string }) => (
-    <div className="bg-white rounded-[30px] md:rounded-[40px] shadow-sm border border-slate-100 overflow-hidden mb-8 md:mb-10 w-full print-shadow-none">
-      <div className={`p-4 md:p-6 border-b flex justify-between items-center ${colorClass} text-white no-print`}>
-        <h3 className="font-black text-lg md:text-xl">{title}</h3>
-        <span className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest">{items.length} مواقع</span>
-      </div>
-      <div className="overflow-x-auto w-full">
-        <table className="w-full text-center border-collapse min-w-[1000px] md:min-w-[1200px]">
-          <thead>
-            <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
-              <th className="p-4 md:p-5">الموقع</th>
-              <th className="p-4 md:p-5">رصيد البداية</th>
-              <th className="p-4 md:p-5 no-print">إجمالي الإفراجات</th>
-              <th className="p-4 md:p-5">تم تحميله (المنفذ)</th>
-              <th className="p-4 md:p-5">في الطريق (الجاري)</th>
-              <th className="p-4 md:p-5">بالميناء (متبقي)</th>
-              <th className="p-4 md:p-5">الوارد للمصنع</th>
-              <th className="p-4 md:p-5 no-print">الصرف (يدوي)</th>
-              <th className="p-4 md:p-5">رصيد المصنع الحالي</th>
-              {canEdit && <th className="p-4 md:p-5 no-print">إجراء</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50 text-slate-700">
-            {items.map((item, idx) => {
-              const isEditing = editingKey === `${item.site}||${item.material}`;
-              return (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 md:p-5 font-black text-slate-800 bg-slate-50/20">{item.site}</td>
-                  <td className="p-4 md:p-5 font-bold">
-                    {isEditing ? (
-                      <input 
-                        type="number" 
-                        value={tempBalance.openingBalance} 
-                        onChange={e => setTempBalance({...tempBalance, openingBalance: Number(e.target.value)})}
-                        className="w-20 p-2 rounded-lg border border-indigo-200 text-center font-black outline-none"
-                      />
-                    ) : (
-                      <span className="text-slate-400">{item.opening.toLocaleString()}</span>
-                    )}
-                  </td>
-                  <td className="p-4 md:p-5 font-bold text-amber-600 no-print">
-                    {item.totalReleased.toLocaleString()}
-                  </td>
-                  <td className="p-4 md:p-5 font-bold text-slate-600">
-                    {item.totalArrived.toLocaleString()}
-                  </td>
-                  <td className="p-4 md:p-5 font-black text-blue-500 bg-blue-50/20">
-                    {item.inTransit.toLocaleString()}
-                  </td>
-                  <td className="p-4 md:p-5 font-black text-indigo-600 bg-indigo-50/10">
-                    {item.releaseRemaining.toLocaleString()}
-                  </td>
-                  <td className="p-4 md:p-5 font-bold text-emerald-600">
-                    {item.totalArrived.toLocaleString()}
-                  </td>
-                  <td className="p-4 md:p-5 font-bold no-print">
-                    {isEditing ? (
-                      <input 
-                        type="number" 
-                        value={tempBalance.manualConsumption} 
-                        onChange={e => setTempBalance({...tempBalance, manualConsumption: Number(e.target.value)})}
-                        className="w-20 p-2 rounded-lg border border-indigo-200 text-center font-black outline-none"
-                      />
-                    ) : (
-                      <span className="text-rose-500">{item.spending.toLocaleString()}</span>
-                    )}
-                  </td>
-                  <td className="p-4 md:p-5 font-black text-slate-900 bg-slate-100/30">
-                    {item.factoryStock.toLocaleString()}
-                  </td>
-                  {canEdit && (
-                    <td className="p-4 md:p-5 no-print">
-                      {isEditing ? (
-                        <div className="flex gap-2 justify-center">
-                           <button disabled={isUpdating} onClick={handleSave} className="bg-emerald-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-sm hover:bg-emerald-700 transition-all"><i className="fas fa-check text-xs"></i></button>
-                           <button onClick={() => setEditingKey(null)} className="bg-slate-100 text-slate-400 w-8 h-8 rounded-lg flex items-center justify-center shadow-sm hover:bg-slate-200 transition-all"><i className="fas fa-times text-xs"></i></button>
-                        </div>
-                      ) : (
-                        <button onClick={() => handleEdit(item)} className="text-indigo-400 hover:text-indigo-600 transition-colors">
-                          <i className="fas fa-edit"></i>
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="animate-in fade-in duration-700 w-full overflow-hidden">
-      {/* Print Header */}
-      <div className="print-only mb-10 text-right border-b-4 border-slate-900 pb-6">
-        <div className="flex justify-between items-start">
-            <div className="text-right">
-                <h1 className="text-3xl font-black mb-2">نظام إدارة نقل الخامات الرئيسي</h1>
-                <h2 className="text-xl font-bold text-slate-600">تقرير أرصدة المخازن والموانئ - قسم {activeMaterialName}</h2>
-                <p className="text-xs text-slate-400 mt-2">تاريخ الاستخراج: {new Date().toLocaleString('ar-EG')}</p>
-            </div>
-            <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-3xl font-black">
-                <i className="fas fa-industry"></i>
-            </div>
-        </div>
-      </div>
-
-      <div className="flex flex-row-reverse items-center justify-between gap-4 mb-8 no-print">
-        <div className="flex flex-row-reverse items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg flex-shrink-0 ${selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'}`}>
-            <i className="fas fa-industry text-xl"></i>
+    <div className="animate-in fade-in duration-700 w-full overflow-hidden text-right font-['Cairo'] pb-20">
+      <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-6 mb-8 px-4 no-print">
+        <div className="flex flex-row-reverse items-center gap-5">
+            <div className="w-12 h-12 bg-[#d97706] rounded-xl flex items-center justify-center text-white shadow-lg">
+              <i className="fas fa-industry text-xl"></i>
             </div>
             <div className="text-right">
-            <h2 className="text-xl md:text-2xl font-black text-slate-800">رصيد المصانع والإفراجات - قسم {activeMaterialName}</h2>
-            <div className="space-y-1 mt-1">
-                <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
-                    <span className="text-indigo-600 ml-2">متبقي الإفراج = إجمالي الإفراج - تم تحميله - في الطريق</span>
-                    <span className="hidden md:inline">|</span>
-                    <span className="text-emerald-600 mr-2 block md:inline">رصيد المصنع = بداية المده + المنفذ - الصرف</span>
-                </p>
-            </div>
+              <h2 className="text-2xl font-black text-slate-800">رصيد المصانع والإفراجات - {activeMaterialName}</h2>
+              <p className="text-[10px] text-emerald-600 font-bold mt-0.5 tracking-widest uppercase">تقرير الأرصدة والتحميلات اليومية</p>
             </div>
         </div>
-        <button 
-            onClick={handlePrint}
-            className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
-        >
-            <i className="fas fa-print"></i> طباعة PDF (Landscape)
+        <button onClick={() => window.print()} className="bg-white border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-black text-xs hover:bg-slate-50 shadow-sm flex items-center gap-2 transition-all">
+            <i className="fas fa-print"></i> طباعة التقرير (A4 Landscape)
         </button>
       </div>
 
-      <div className="w-full">
-        <TableSection 
-          title={`تقرير أرصدة ${activeMaterialName}`} 
-          items={data} 
-          colorClass={selectedMaterial === 'soy' ? 'bg-emerald-600' : 'bg-amber-600'} 
-        />
-      </div>
+      <div className="bg-white rounded-[35px] shadow-2xl border border-slate-100 overflow-hidden mb-12 mx-2 print-shadow-none">
+        <div className="bg-[#d97706] p-5 text-white flex justify-between items-center px-8">
+           <div className="flex flex-row-reverse items-center gap-2">
+              <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-md font-black no-print">{data.length} مواقع</span>
+              <h3 className="font-black text-xl">بيان أرصدة وموقف تحميل {activeMaterialName}</h3>
+           </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-center border-collapse min-w-[1100px]">
+            <thead>
+              <tr className="bg-slate-50/50 text-[11px] font-black text-slate-400 uppercase tracking-widest border-b">
+                <th className="p-5 text-slate-800 font-black border">الموقع</th>
+                <th className="p-5 text-slate-500 font-bold border">رصيد البداية</th>
+                <th className="p-5 text-amber-600 font-bold border no-print">إجمالي الإفراجات</th>
+                <th className="p-5 text-slate-400 font-bold border no-print">المنفذ (المحمل)</th>
+                <th className="p-5 text-blue-500 font-bold border">في الطريق (مؤكد وصول)</th>
+                <th className="p-5 text-indigo-700 font-bold border">بالميناء (متبقي)</th>
+                <th className="p-5 text-emerald-600 font-bold border">الوارد للمصنع</th>
+                <th className="p-5 text-rose-500 font-bold border no-print">الصرف (يدوي)</th>
+                <th className="p-5 text-slate-900 font-black text-base border">رصيد المصنع الحالي</th>
+                {canEdit && <th className="p-5 text-slate-400 font-bold border no-print">إجراء</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 text-slate-700">
+              {data.map((item, idx) => {
+                const isEditing = editingKey === `${item.siteNorm}||${item.material}`;
+                const isNegativePort = item.portRemaining < -0.001;
+                const isNegativeStock = item.currentStock < -0.001;
+                
+                return (
+                  <tr key={idx} className="hover:bg-slate-50/30 transition-all group">
+                    <td className="p-5 font-black text-slate-900 text-base border">{item.site}</td>
+                    
+                    <td className="p-5 border">
+                      {isEditing ? (
+                        <input type="number" step="0.001" value={tempBalance.openingBalance} onChange={e => setTempBalance({...tempBalance, openingBalance: Number(e.target.value)})} className="w-24 p-2 rounded-lg border-2 border-amber-200 text-center font-black outline-none" />
+                      ) : <span className="text-slate-500 font-bold">{item.opening.toLocaleString(undefined, {minimumFractionDigits: 3})}</span>}
+                    </td>
 
-      {/* Print Footer */}
-      <div className="print-only mt-10 text-center text-[10px] text-slate-400 font-bold border-t pt-4">
-        تم استخراج هذا التقرير تلقائياً بواسطة نظام النقل الذكي | ملاحظة: تم إخفاء أعمدة الصرف والإفراج الكلي للتركيز على الأرصدة.
+                    <td className="p-5 font-bold text-[#d97706] border no-print">{item.totalReleased.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td className="p-5 font-bold text-slate-700 border no-print">{item.totalArrivedCumulative.toLocaleString(undefined, {minimumFractionDigits: 3})}</td>
+                    
+                    <td className="p-5 font-bold text-blue-500 border">{item.inTransit.toLocaleString(undefined, {minimumFractionDigits: 3})}</td>
+                    
+                    <td className={`p-5 font-bold border transition-colors ${isNegativePort ? 'text-rose-600' : 'text-indigo-700'}`}>
+                        {item.portRemaining.toLocaleString(undefined, {minimumFractionDigits: 3})}
+                    </td>
+                    
+                    <td className="p-5 font-bold text-emerald-600 border">
+                        {item.yesterdayArrived.toLocaleString(undefined, {minimumFractionDigits: 3})}
+                    </td>
+
+                    <td className="p-5 border no-print">
+                      {isEditing ? (
+                        <input type="number" step="0.001" value={tempBalance.manualConsumption} onChange={e => setTempBalance({...tempBalance, manualConsumption: Number(e.target.value)})} className="w-24 p-2 rounded-lg border-2 border-amber-200 text-center font-black outline-none" />
+                      ) : <span className="text-rose-500 font-bold">{item.spending.toLocaleString(undefined, {minimumFractionDigits: 3})}</span>}
+                    </td>
+
+                    <td className={`p-5 font-black text-lg border transition-colors ${isNegativeStock ? 'text-rose-600' : 'text-slate-900'}`}>
+                        {item.currentStock.toLocaleString(undefined, {minimumFractionDigits: 3})}
+                    </td>
+
+                    {canEdit && (
+                      <td className="p-5 border no-print">
+                        {isEditing ? (
+                          <div className="flex gap-2 justify-center">
+                            <button onClick={handleSave} className="w-8 h-8 bg-emerald-600 text-white rounded-lg flex items-center justify-center"><i className="fas fa-check"></i></button>
+                            <button onClick={() => setEditingKey(null)} className="w-8 h-8 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center"><i className="fas fa-times"></i></button>
+                          </div>
+                        ) : (
+                          <button onClick={() => handleEdit(item)} className="w-8 h-8 text-indigo-600 bg-indigo-50 rounded-lg flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all">
+                              <i className="fas fa-edit text-xs"></i>
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

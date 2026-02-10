@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Release, TransportRecord, OperationStatus } from '../types';
 import { exportReportToExcel } from '../utils/excelExport';
@@ -19,11 +20,13 @@ const PeriodicReport: React.FC<Props> = ({ releases, records, t }) => {
     const to = new Date(dateRange.to);
     to.setHours(23, 59, 59, 999);
 
+    // 1. النقلات المنفذة خلال الفترة المختارة فقط
     const periodRecords = records.filter(r => {
       const d = new Date(r.date);
       return d >= from && d <= to;
     });
 
+    // 2. الإفراجات المنفذة خلال الفترة المختارة فقط (كما طلب المستخدم)
     const periodReleases = releases.filter(r => {
       const d = new Date(r.date);
       return d >= from && d <= to;
@@ -36,26 +39,49 @@ const PeriodicReport: React.FC<Props> = ({ releases, records, t }) => {
 
     const siteBreakdown: Record<string, { released: number; added: number; stopped: number; trips: number }> = {};
     
+    // أولاً: تجميع الإفراجات التي تمت خلال الفترة لكل موقع
     periodReleases.forEach(r => {
-      if (!siteBreakdown[r.siteName]) siteBreakdown[r.siteName] = { released: 0, added: 0, stopped: 0, trips: 0 };
-      siteBreakdown[r.siteName].released += (r.totalQuantity || 0);
+      const site = String(r.siteName).trim();
+      if (!siteBreakdown[site]) siteBreakdown[site] = { released: 0, added: 0, stopped: 0, trips: 0 };
+      siteBreakdown[site].released += (r.totalQuantity || 0);
     });
 
+    // ثانياً: تجميع النقلات التي تمت خلال الفترة لكل موقع
     periodRecords.forEach(r => {
-      if (!siteBreakdown[r.unloadingSite]) siteBreakdown[r.unloadingSite] = { released: 0, added: 0, stopped: 0, trips: 0 };
+      const site = String(r.unloadingSite).trim();
+      if (!siteBreakdown[site]) siteBreakdown[site] = { released: 0, added: 0, stopped: 0, trips: 0 };
+      
       if (r.status === OperationStatus.DONE) {
-        siteBreakdown[r.unloadingSite].added += (r.weight || 0);
+        siteBreakdown[site].added += (r.weight || 0);
       } else if (r.status === OperationStatus.STOPPED) {
-        siteBreakdown[r.unloadingSite].stopped += (r.weight || 0);
+        siteBreakdown[site].stopped += (r.weight || 0);
       }
-      siteBreakdown[r.unloadingSite].trips += 1;
+      siteBreakdown[site].trips += 1;
     });
 
     return { totalReleased, totalAdded, totalStopped, totalTrips, siteBreakdown, periodRecords };
   }, [releases, records, dateRange]);
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12 text-right">
+      {/* Print Header */}
+      <div className="print-only mb-10 text-right border-b-4 border-slate-900 pb-6">
+        <div className="flex justify-between items-start">
+            <div className="text-right">
+                <h1 className="text-3xl font-black mb-2">نظام إدارة نقل الخامات الرئيسي</h1>
+                <h2 className="text-xl font-bold text-slate-600">تقرير الأداء والإنتاجية الدوري</h2>
+                <p className="text-xs text-slate-400 mt-2">الفترة من {dateRange.from} إلى {dateRange.to} | تاريخ الاستخراج: {new Date().toLocaleString('ar-EG')}</p>
+            </div>
+            <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-3xl font-black">
+                <i className="fas fa-chart-line"></i>
+            </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-[32px] shadow-sm border flex flex-col md:flex-row items-center justify-between gap-6 no-print">
         <div>
           <h2 className="text-xl font-black text-gray-800">{t.performanceReportTitle}</h2>
@@ -70,46 +96,51 @@ const PeriodicReport: React.FC<Props> = ({ releases, records, t }) => {
             <span className="text-[10px] font-black text-gray-400 uppercase">{t.to}:</span>
             <input type="date" value={dateRange.to} onChange={e => setDateRange({...dateRange, to: e.target.value})} className="bg-white border-none text-xs font-bold p-2 rounded-xl outline-none" />
           </div>
-          <button onClick={() => exportReportToExcel(reportData, dateRange)} className="bg-green-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 shadow-lg transition-transform active:scale-95">
-             <i className="fas fa-file-excel"></i> {t.export} Excel
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => exportReportToExcel(reportData, dateRange)} className="bg-green-600 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 shadow-lg transition-transform active:scale-95">
+               <i className="fas fa-file-excel"></i> {t.export} Excel
+            </button>
+            <button onClick={handlePrint} className="bg-slate-800 text-white px-6 py-3 rounded-2xl text-xs font-black flex items-center gap-2 shadow-lg transition-transform active:scale-95">
+               <i className="fas fa-print"></i> طباعة PDF
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-amber-500 text-white p-5 rounded-[32px] shadow-xl flex flex-col justify-between h-36">
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.releasedCol}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.releasedCol} للفترة</span>
           <div><span className="text-2xl font-black">{reportData.totalReleased.toLocaleString()}</span> <span className="text-[10px] font-bold">{t.ton}</span></div>
         </div>
         <div className="bg-indigo-600 text-white p-5 rounded-[32px] shadow-xl flex flex-col justify-between h-36">
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.totalExecuted}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.totalExecuted} للفترة</span>
           <div><span className="text-2xl font-black">{reportData.totalAdded.toLocaleString()}</span> <span className="text-[10px] font-bold">{t.ton}</span></div>
         </div>
         <div className="bg-rose-600 text-white p-5 rounded-[32px] shadow-xl flex flex-col justify-between h-36">
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.stoppedCol}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.stoppedCol} للفترة</span>
           <div><span className="text-2xl font-black">{reportData.totalStopped.toLocaleString()}</span> <span className="text-[10px] font-bold">{t.ton}</span></div>
         </div>
         <div className="bg-emerald-600 text-white p-5 rounded-[32px] shadow-xl flex flex-col justify-between h-36">
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.tripsCol}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest">{t.tripsCol} للفترة</span>
           <div><span className="text-2xl font-black">{reportData.totalTrips.toLocaleString()}</span> <span className="text-[10px] font-bold">{t.trip}</span></div>
         </div>
       </div>
 
-      <div className="bg-white rounded-[32px] shadow-sm border overflow-hidden">
-        <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+      <div className="bg-white rounded-[32px] shadow-sm border overflow-hidden print-shadow-none">
+        <div className="p-6 border-b bg-gray-50 flex justify-between items-center no-print">
           <h3 className="font-black text-gray-800 flex items-center gap-2">{t.siteAnalysisTitle}</h3>
-          <span className="text-[10px] text-gray-400 font-black uppercase">{t.siteAnalysisPeriod}</span>
+          <span className="text-[10px] text-gray-400 font-black uppercase">تحليل النشاط للفترة المحددة</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse">
             <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
               <tr>
                 <th className="px-6 py-4 border">{t.siteCol}</th>
-                <th className="px-6 py-4 border">{t.releasedCol}</th>
-                <th className="px-6 py-4 border">{t.addedCol}</th>
-                <th className="px-6 py-4 border">{t.stoppedCol}</th>
-                <th className="px-6 py-4 border">{t.tripsCol}</th>
-                <th className="px-6 py-4 border">{t.completionRate}</th>
+                <th className="px-6 py-4 border">{t.releasedCol} (للفترة)</th>
+                <th className="px-6 py-4 border">{t.addedCol} (للفترة)</th>
+                <th className="px-6 py-4 border">{t.stoppedCol} (للفترة)</th>
+                <th className="px-6 py-4 border">{t.tripsCol} (للفترة)</th>
+                <th className="px-6 py-4 border">نسبة إنجاز الفترة</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-sm">
@@ -125,7 +156,7 @@ const PeriodicReport: React.FC<Props> = ({ releases, records, t }) => {
                     <td className="px-6 py-4 font-bold text-gray-600 border">{data.trips}</td>
                     <td className="px-6 py-4 border">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden no-print">
                           <div className="bg-emerald-500 h-full" style={{ width: `${Math.min(100, completion)}%` }}></div>
                         </div>
                         <span className="text-[10px] font-black text-gray-400">{completion.toFixed(1)}%</span>
@@ -140,6 +171,10 @@ const PeriodicReport: React.FC<Props> = ({ releases, records, t }) => {
             </tbody>
           </table>
         </div>
+      </div>
+      {/* Print Footer */}
+      <div className="print-only mt-10 text-center text-[10px] text-slate-400 font-bold border-t pt-4">
+        تم استخراج هذا التقرير تلقائياً بواسطة نظام النقل الذكي | كافة البيانات أعلاه تخص الفترة الزمنية المحددة فقط.
       </div>
     </div>
   );
